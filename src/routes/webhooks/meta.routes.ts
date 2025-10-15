@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { metaService } from '../../services/meta/meta.service';
 import { logger } from '../../config/logger';
 import { addIncomingMessageJob } from '../../queues/queues';
+import { prometheusService } from '../../services/metrics/prometheus.service';
 import type {
   MetaWebhookVerification,
   MetaWebhookMessage,
@@ -89,11 +90,14 @@ const metaWebhookRoutes: FastifyPluginAsync = async (fastify) => {
     },
   }, async (request, reply) => {
     const body = request.body;
+    const endTimer = prometheusService.measureWebhookProcessing('meta');
 
     logger.info({
       msg: '📨 Webhook recebido da Meta',
       object: body.object,
     });
+
+    prometheusService.recordWebhookReceived('meta', body.object);
 
     // Verifica se é uma notificação de mensagem do WhatsApp
     if (body.object !== 'whatsapp_business_account') {
@@ -114,6 +118,7 @@ const metaWebhookRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
+    endTimer();
     return reply.code(200).send({ status: 'ok' });
   });
 };

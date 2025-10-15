@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { logger } from '../../config/logger';
 import { addOutboundMessageJob } from '../../queues/queues';
+import { prometheusService } from '../../services/metrics/prometheus.service';
 import type { Bitrix24OutboundWebhook } from '../../types/bitrix24.types';
 
 /**
@@ -43,11 +44,14 @@ const bitrix24WebhookRoutes: FastifyPluginAsync = async (fastify) => {
     },
   }, async (request, reply) => {
     const body = request.body;
+    const endTimer = prometheusService.measureWebhookProcessing('bitrix24');
 
     logger.info({
       msg: '📨 Webhook recebido do Bitrix24',
       event: body.event,
     });
+
+    prometheusService.recordWebhookReceived('bitrix24', body.event);
 
     // Verifica se é um evento de mensagem adicionada
     if (body.event !== 'ONIMMESSAGEADD') {
@@ -56,6 +60,7 @@ const bitrix24WebhookRoutes: FastifyPluginAsync = async (fastify) => {
 
     await processOutboundMessage(body);
 
+    endTimer();
     return reply.code(200).send({ status: 'ok' });
   });
 };

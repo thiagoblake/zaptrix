@@ -7,6 +7,7 @@ import { testConnection } from './db';
 import { testRedisConnection } from './config/redis';
 import { cacheService } from './services/cache/cache.service';
 import { getQueuesStats } from './queues/queues';
+import { prometheusService } from './services/metrics/prometheus.service';
 
 /**
  * Cria e configura o servidor Fastify
@@ -110,6 +111,27 @@ export async function buildServer() {
   }, async (request, reply) => {
     const stats = await getQueuesStats();
     return stats || { error: 'Failed to get queue stats' };
+  });
+
+  // Prometheus metrics endpoint
+  server.get('/metrics', {
+    schema: {
+      description: 'Métricas Prometheus',
+      tags: ['Monitoring'],
+    },
+  }, async (request, reply) => {
+    reply.header('Content-Type', prometheusService.register.contentType);
+    return prometheusService.getMetrics();
+  });
+
+  // Metrics JSON endpoint (para debugging)
+  server.get('/metrics/json', {
+    schema: {
+      description: 'Métricas em formato JSON',
+      tags: ['Monitoring'],
+    },
+  }, async (request, reply) => {
+    return prometheusService.getMetricsJSON();
   });
 
   // Registrar rotas de webhooks

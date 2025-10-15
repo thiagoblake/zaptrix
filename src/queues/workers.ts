@@ -5,6 +5,7 @@ import { conversationMapper } from '../core/mapper';
 import { metaService } from '../services/meta/meta.service';
 import { bitrix24Service } from '../services/bitrix24/bitrix24.service';
 import { cacheService } from '../services/cache/cache.service';
+import { prometheusService } from '../services/metrics/prometheus.service';
 import type {
   ProcessIncomingMessageJob,
   ProcessOutboundMessageJob,
@@ -20,6 +21,7 @@ export const incomingMessagesWorker = new Worker<ProcessIncomingMessageJob, JobR
   queueConfigs.incomingMessages.name,
   async (job: Job<ProcessIncomingMessageJob>) => {
     const { messageId, from, contactName, messageText } = job.data;
+    const endTimer = prometheusService.measureQueueJob('incoming-messages');
 
     logger.info({
       msg: '⚙️ Processando mensagem recebida',
@@ -96,6 +98,9 @@ export const incomingMessagesWorker = new Worker<ProcessIncomingMessageJob, JobR
       // Marca como processada
       await cacheService.markMessageAsProcessed(messageId);
 
+      prometheusService.recordMessageProcessed('incoming', 'success');
+      endTimer('success');
+
       logger.info({
         msg: '✅ Mensagem recebida processada com sucesso',
         messageId,
@@ -108,6 +113,9 @@ export const incomingMessagesWorker = new Worker<ProcessIncomingMessageJob, JobR
         data: { bitrixMessageId: messageId_B24 },
       };
     } catch (error) {
+      prometheusService.recordMessageProcessed('incoming', 'failed');
+      endTimer('failed');
+
       logger.error({
         msg: '❌ Erro ao processar mensagem recebida',
         messageId,
@@ -130,6 +138,7 @@ export const outboundMessagesWorker = new Worker<ProcessOutboundMessageJob, JobR
   queueConfigs.outboundMessages.name,
   async (job: Job<ProcessOutboundMessageJob>) => {
     const { bitrixChatId, message, fromUserId } = job.data;
+    const endTimer = prometheusService.measureQueueJob('outbound-messages');
 
     logger.info({
       msg: '⚙️ Processando mensagem de saída',
@@ -160,6 +169,9 @@ export const outboundMessagesWorker = new Worker<ProcessOutboundMessageJob, JobR
       // Atualiza timestamp
       await conversationMapper.updateLastMessage(mapping.metaWhatsappId);
 
+      prometheusService.recordMessageProcessed('outbound', 'success');
+      endTimer('success');
+
       logger.info({
         msg: '✅ Mensagem de saída processada com sucesso',
         whatsappId: mapping.metaWhatsappId,
@@ -172,6 +184,9 @@ export const outboundMessagesWorker = new Worker<ProcessOutboundMessageJob, JobR
         data: { metaMessageId: result.messages[0].id },
       };
     } catch (error) {
+      prometheusService.recordMessageProcessed('outbound', 'failed');
+      endTimer('failed');
+
       logger.error({
         msg: '❌ Erro ao processar mensagem de saída',
         bitrixChatId,
