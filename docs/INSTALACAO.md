@@ -6,7 +6,9 @@ Antes de começar, certifique-se de ter instalado:
 
 - **Node.js 18+** - [Download](https://nodejs.org/)
 - **PostgreSQL 14+** - [Download](https://www.postgresql.org/download/)
+- **⭐ Redis 7+** - [Download](https://redis.io/download/) ou use Docker
 - **npm ou yarn** - Vem com Node.js
+- **Docker & Docker Compose** (opcional, recomendado) - [Download](https://www.docker.com/)
 
 ## 🔧 Passo 1: Configuração do Banco de Dados
 
@@ -27,12 +29,31 @@ GRANT ALL PRIVILEGES ON DATABASE zaptrix TO zaptrix_user;
 \q
 ```
 
-### 1.2. Configurar variáveis de ambiente
+### 1.2. Opção Alternativa: Usar Docker Compose
+
+**Recomendado para desenvolvimento:**
+
+```bash
+# Sobe PostgreSQL + Redis automaticamente
+npm run docker:up
+
+# Verificar se os serviços estão rodando
+docker ps
+```
+
+### 1.3. Configurar variáveis de ambiente
 
 Edite o arquivo `.env` na raiz do projeto:
 
 ```env
+# Banco de Dados
 DATABASE_URL=postgresql://zaptrix_user:sua_senha_segura@localhost:5432/zaptrix
+
+# ⭐ Redis (NOVO)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=  # deixe vazio se não tiver senha
+REDIS_DB=0
 ```
 
 ## 📦 Passo 2: Instalação das Dependências
@@ -161,10 +182,58 @@ npm start
 
 ## ✅ Passo 7: Testar a Instalação
 
-1. Acesse a documentação: http://localhost:3000/documentation
-2. Teste o health check: http://localhost:3000/health
-3. Envie uma mensagem de teste no WhatsApp
-4. Verifique os logs do servidor
+### 7.1. Verificar Health Check
+
+```bash
+curl http://localhost:3000/health
+```
+
+Deve retornar:
+```json
+{
+  "status": "ok",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "database": "connected",
+  "redis": "connected"
+}
+```
+
+### 7.2. Acessar Documentação
+
+- **Swagger UI**: http://localhost:3000/documentation
+- **Métricas**: http://localhost:3000/metrics
+- **Stats do Cache**: http://localhost:3000/cache/stats
+- **Stats das Filas**: http://localhost:3000/queues/stats
+
+### 7.3. Teste Completo
+
+1. Envie uma mensagem de teste no WhatsApp
+2. Verifique os logs do servidor
+3. Verifique as filas: http://localhost:3000/queues/stats
+4. Responda no Bitrix24 e verifique se a mensagem chega no WhatsApp
+
+## 📊 Passo 8: Configurar Monitoramento (Opcional)
+
+### 8.1. Subir Prometheus + Grafana
+
+```bash
+# Subir stack de monitoramento
+docker-compose -f docker-compose.monitoring.yml up -d
+
+# Verificar se estão rodando
+docker ps | grep -E "prometheus|grafana"
+```
+
+### 8.2. Acessar Grafana
+
+1. Abra: http://localhost:3001
+2. Login: `admin` / `admin`
+3. Navegue para **Dashboards** > **Zaptrix Dashboard**
+4. Visualize métricas em tempo real:
+   - Taxa de mensagens
+   - Latência
+   - Tamanho das filas
+   - Taxa de sucesso/erro
 
 ## 🔍 Solução de Problemas
 
@@ -176,6 +245,27 @@ sudo systemctl status postgresql
 
 # Teste a conexão
 psql -U zaptrix_user -d zaptrix -h localhost
+
+# Se estiver usando Docker
+docker ps | grep postgres
+docker logs zaptrix-postgres
+```
+
+### ⭐ Erro de conexão com Redis
+
+```bash
+# Verifique se o Redis está rodando
+redis-cli ping
+# Deve retornar: PONG
+
+# Se estiver usando Docker
+docker ps | grep redis
+docker logs zaptrix-redis
+
+# Teste a conexão
+redis-cli -h localhost -p 6379
+> PING
+# Deve retornar: PONG
 ```
 
 ### Erro na verificação do webhook da Meta
@@ -189,14 +279,70 @@ psql -U zaptrix_user -d zaptrix -h localhost
 - Verifique se o `BITRIX_CLIENT_ID` e `BITRIX_CLIENT_SECRET` estão corretos
 - Os tokens serão renovados automaticamente pelo sistema
 
+### ⭐ Filas não estão processando
+
+```bash
+# Verifique os logs
+npm run dev
+
+# Verifique o status das filas
+curl http://localhost:3000/queues/stats
+
+# Verifique se o Redis está acessível
+curl http://localhost:3000/health
+```
+
+### ⭐ Métricas não aparecem no Grafana
+
+```bash
+# Verifique se o Prometheus está coletando métricas
+curl http://localhost:9090/targets
+
+# Verifique se a API está expondo métricas
+curl http://localhost:3000/metrics
+
+# Reinicie os serviços
+docker-compose -f docker-compose.monitoring.yml restart
+```
+
 ## 📚 Próximos Passos
 
+### Para Desenvolvimento
+- ✅ Explore a documentação Swagger
+- ✅ Teste envio de mensagens rich media (imagens, vídeos)
+- ✅ Configure múltiplos portais (multi-tenant)
+- ✅ Monitore métricas no Grafana
+
+### Para Produção
 - Configure um proxy reverso (Nginx) para produção
 - Configure SSL/TLS (Let's Encrypt)
-- Configure um gerenciador de processos (PM2)
-- Configure monitoramento e alertas
+- Configure um gerenciador de processos (PM2 ou Docker Swarm)
+- ⭐ Configure Redis com persistência (AOF ou RDB)
+- ⭐ Configure PostgreSQL com replicação
+- Configure backup automático
+- Configure alertas no Grafana
+- Implemente logging centralizado (ELK stack)
+
+## 🔐 Checklist de Segurança
+
+Antes de ir para produção:
+
+- [ ] Altere todas as senhas padrão
+- [ ] Configure SSL/TLS (HTTPS)
+- [ ] Configure CORS adequadamente
+- [ ] Configure rate limiting por cliente
+- [ ] Ative logs de auditoria
+- [ ] Configure backup automático
+- [ ] Teste o sistema de retry
+- [ ] Configure alertas de erro
+- [ ] Documente credenciais em cofre seguro
+- [ ] Configure firewall (apenas portas necessárias)
 
 ## 🆘 Suporte
 
-Para problemas e dúvidas, consulte a [documentação completa](../README.md).
+Para problemas e dúvidas:
+- 📖 [Documentação Completa](../README.md)
+- 🏗️ [Arquitetura do Sistema](./ARQUITETURA.md)
+- 📡 [Documentação da API](./API.md)
+- 🚀 [Guia de Deploy](./DEPLOYMENT.md)
 

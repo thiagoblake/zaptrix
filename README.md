@@ -26,6 +26,7 @@ Garante que:
 
 ## ✨ Características
 
+### 🚀 Core
 - 🔥 **Alta Performance**: Fastify + Node.js para I/O Bound
 - 🔒 **Tipagem Rigorosa**: TypeScript em todo o código
 - 📊 **ORM Moderno**: Drizzle ORM com migrações SQL
@@ -33,7 +34,29 @@ Garante que:
 - 🔄 **Refresh Token Automático**: Gerenciamento inteligente de tokens OAuth
 - 📝 **Logging Completo**: Pino logger com níveis configuráveis
 - 🐳 **Docker Ready**: Configuração completa para containerização
-- 🔐 **Seguro**: Validação de entrada com Zod, HTTPS, rate limiting
+
+### ⚡ Performance & Escalabilidade
+- 💾 **Cache Redis**: Cache distribuído para mapeamentos frequentes
+- 📋 **Filas BullMQ**: Processamento assíncrono com retry automático
+- 🔁 **Retry Exponencial**: Backoff automático em falhas
+- 🛡️ **Rate Limiting**: Proteção contra abuse e overload
+
+### 📊 Observabilidade
+- 📈 **Métricas Prometheus**: Métricas de throughput, latência e health
+- 📊 **Dashboard Grafana**: Visualização em tempo real
+- 🔍 **Logs Estruturados**: Pino com níveis configuráveis
+- ✅ **Health Checks**: Monitoramento completo do sistema
+
+### 🏢 Multi-tenant
+- 🏗️ **Múltiplos Portais**: Suporte a vários Bitrix24 simultâneos
+- 🔐 **Isolamento**: Cada portal com seus dados e tokens
+- 🎯 **Identificação**: Por header ou configuração
+
+### 📱 Mensagens Avançadas
+- 🖼️ **Rich Media**: Imagens, vídeos, documentos, áudio
+- 📋 **Templates WhatsApp**: Templates pré-aprovados pela Meta
+- 🎨 **Interativos**: Templates com parâmetros e botões
+- 📥 **Download**: Download de mídia recebida
 
 ## 🚀 Stack Tecnológica
 
@@ -43,6 +66,9 @@ Garante que:
 | **Framework Web** | Fastify | Alta performance para webhooks |
 | **Banco de Dados** | PostgreSQL | Armazenamento persistente e confiável |
 | **ORM** | Drizzle ORM | Tipagem e migrações SQL modernas |
+| **Cache** | Redis | Cache distribuído e deduplicação |
+| **Filas** | BullMQ | Processamento assíncrono robusto |
+| **Métricas** | Prometheus + Grafana | Observabilidade completa |
 | **Documentação** | Fastify Swagger | OpenAPI/Swagger UI automático |
 | **Logging** | Pino | Logs estruturados e performáticos |
 
@@ -81,6 +107,7 @@ npm run dev
 
 - [Node.js 18+](https://nodejs.org/)
 - [PostgreSQL 14+](https://www.postgresql.org/) (ou use Docker)
+- [Redis 7+](https://redis.io/) (ou use Docker)
 - Conta [Bitrix24](https://www.bitrix24.com.br/) com Aplicativo Local
 - [Meta Cloud API](https://developers.facebook.com/) (WhatsApp Business API)
 
@@ -91,29 +118,44 @@ zaptrix/
 ├── src/
 │   ├── config/              # Configurações e variáveis de ambiente
 │   │   ├── env.ts          # Validação de env com Zod
-│   │   └── logger.ts       # Configuração do Pino logger
+│   │   ├── logger.ts       # Configuração do Pino logger
+│   │   └── redis.ts        # ⭐ Configuração do Redis
 │   ├── db/                  # Drizzle ORM e banco de dados
-│   │   ├── schema.ts       # Schemas das tabelas
+│   │   ├── schema.ts       # Schemas das tabelas (multi-tenant)
 │   │   ├── index.ts        # Cliente Drizzle
 │   │   └── migrate.ts      # Script de migração
 │   ├── services/            # Lógica de negócio
 │   │   ├── bitrix24/       # Serviços Bitrix24
-│   │   └── meta/           # Serviços Meta Cloud API
+│   │   ├── meta/           # Serviços Meta Cloud API
+│   │   │   ├── meta.service.ts    # Envio de mensagens
+│   │   │   ├── media.service.ts   # ⭐ Rich media
+│   │   │   └── template.service.ts # ⭐ Templates
+│   │   ├── cache/          # ⭐ Serviço de cache Redis
+│   │   ├── metrics/        # ⭐ Métricas Prometheus
+│   │   └── portal/         # ⭐ Gerenciamento multi-tenant
 │   ├── routes/              # Controladores Fastify
-│   │   └── webhooks/       # Endpoints de webhook
+│   │   ├── webhooks/       # Endpoints de webhook
+│   │   ├── portal/         # ⭐ Gerenciamento de portais
+│   │   └── messages/       # ⭐ Envio de mensagens rich
+│   ├── queues/              # ⭐ Filas BullMQ
+│   │   ├── config.ts       # Configuração das filas
+│   │   ├── queues.ts       # Definição das filas
+│   │   ├── workers.ts      # Workers assíncronos
+│   │   └── types.ts        # Tipos dos jobs
 │   ├── core/                # Lógica central
 │   │   └── mapper.ts       # Mapeamento de conversas
 │   ├── types/               # Definições TypeScript
 │   ├── server.ts            # Configuração do Fastify
 │   └── index.ts             # Ponto de entrada
 ├── docs/                    # Documentação completa
-│   ├── QUICKSTART.md       # Guia rápido
-│   ├── INSTALACAO.md       # Instalação detalhada
-│   ├── ARQUITETURA.md      # Arquitetura do sistema
-│   ├── API.md              # Documentação da API
-│   └── DEPLOYMENT.md       # Guia de deploy
+├── grafana/                 # ⭐ Dashboards Grafana
+├── prometheus/              # ⭐ Configuração Prometheus
 ├── scripts/                 # Scripts utilitários
+├── docker-compose.yml       # PostgreSQL + Redis
+├── docker-compose.monitoring.yml # ⭐ Prometheus + Grafana
 └── drizzle.config.ts       # Configuração do Drizzle
+
+⭐ = Novos arquivos/funcionalidades
 ```
 
 ## 🔄 Como Funciona
@@ -169,8 +211,8 @@ npm run db:studio        # Abre Drizzle Studio (GUI)
 npm run db:setup         # Configurar portal Bitrix24
 
 # Docker
-npm run docker:up        # Sobe PostgreSQL
-npm run docker:down      # Para PostgreSQL
+npm run docker:up        # Sobe PostgreSQL + Redis
+npm run docker:down      # Para todos os containers
 npm run docker:logs      # Visualiza logs
 
 # Qualidade de Código
@@ -261,28 +303,46 @@ curl "http://localhost:3000/webhooks/meta?hub.mode=subscribe&hub.verify_token=se
 
 ## 📊 Monitoramento
 
-### Logs
+### Endpoints de Status
 ```bash
-# Ver logs em desenvolvimento
-npm run dev
-
-# Ver logs com Docker
-npm run docker:logs
-```
-
-### Health Endpoint
-```
+# Health Check
 GET http://localhost:3000/health
+# Retorna: { status, timestamp, database, redis }
+
+# Estatísticas do Cache
+GET http://localhost:3000/cache/stats
+# Retorna: { usedMemory, connectedClients, totalKeys }
+
+# Estatísticas das Filas
+GET http://localhost:3000/queues/stats
+# Retorna: status de todas as filas (waiting, active, completed, failed)
+
+# Métricas Prometheus
+GET http://localhost:3000/metrics
+# Formato Prometheus para scraping
+
+# Métricas JSON (debug)
+GET http://localhost:3000/metrics/json
 ```
 
-Retorna:
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "database": "connected"
-}
+### Dashboard Grafana
+
+Acesse o dashboard completo em:
+```bash
+# Subir Prometheus + Grafana
+docker-compose -f docker-compose.monitoring.yml up -d
+
+# Acessar Grafana
+http://localhost:3001
+# Login: admin / admin
 ```
+
+**Dashboard inclui:**
+- Taxa de mensagens processadas
+- Latência (p95/p99)
+- Tamanho das filas
+- Webhooks por origem
+- Erros e sucessos
 
 ## 🚀 Deploy em Produção
 

@@ -2,25 +2,104 @@
 
 ## 📚 Visão Geral
 
-A API do Zaptrix oferece endpoints para integração entre Meta Cloud API (WhatsApp) e Bitrix24.
+A API do Zaptrix oferece endpoints completos para:
+- 📱 Integração Meta Cloud API (WhatsApp) ↔ Bitrix24
+- 🏢 Gerenciamento multi-tenant (múltiplos portais)
+- 📊 Monitoramento e métricas
+- 🖼️ Envio de mensagens rich media
+- 📋 Templates do WhatsApp
 
 **Base URL**: `http://localhost:3000` (desenvolvimento)
 
 **Documentação Interativa**: `http://localhost:3000/documentation`
 
-## 🔍 Health Check
+## 🔍 Health & Monitoring
 
 ### GET /health
 
-Verifica o status do serviço e conexão com o banco de dados.
+Verifica o status do serviço e conexões.
 
 **Response 200 OK**
 ```json
 {
   "status": "ok",
   "timestamp": "2024-01-15T10:30:00.000Z",
-  "database": "connected"
+  "database": "connected",
+  "redis": "connected"
 }
+```
+
+---
+
+### GET /cache/stats
+
+Estatísticas do cache Redis.
+
+**Response 200 OK**
+```json
+{
+  "usedMemory": "2.5M",
+  "connectedClients": 5,
+  "totalKeys": 142
+}
+```
+
+---
+
+### GET /queues/stats
+
+Estatísticas das filas de processamento.
+
+**Response 200 OK**
+```json
+{
+  "incomingMessages": {
+    "waiting": 5,
+    "active": 2,
+    "completed": 1523,
+    "failed": 3
+  },
+  "outboundMessages": {
+    "waiting": 1,
+    "active": 1,
+    "completed": 1489,
+    "failed": 1
+  },
+  "metaMessages": { ... },
+  "bitrix24Messages": { ... }
+}
+```
+
+---
+
+### GET /metrics
+
+Métricas no formato Prometheus para scraping.
+
+**Response 200 OK** (text/plain)
+```
+# HELP zaptrix_messages_processed_total Total de mensagens processadas
+# TYPE zaptrix_messages_processed_total counter
+zaptrix_messages_processed_total{direction="incoming",status="success"} 1523
+...
+```
+
+---
+
+### GET /metrics/json
+
+Métricas em formato JSON (para debugging).
+
+**Response 200 OK**
+```json
+[
+  {
+    "name": "zaptrix_messages_processed_total",
+    "type": "counter",
+    "help": "Total de mensagens processadas",
+    "values": [...]
+  }
+]
 ```
 
 ---
@@ -263,6 +342,195 @@ Importe a coleção disponível em `/docs/postman-collection.json`
 - **ngrok**: Túnel HTTPS para testes locais
 - **webhook.site**: Inspeção de webhooks
 - **Postman**: Cliente API
+
+---
+
+## 🏢 Gerenciamento de Portais (Multi-tenant)
+
+### GET /api/portals
+
+Lista todos os portais configurados.
+
+**Response 200 OK**
+```json
+[
+  {
+    "id": "uuid-1",
+    "portalUrl": "https://portal1.bitrix24.com.br",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  },
+  {
+    "id": "uuid-2",
+    "portalUrl": "https://portal2.bitrix24.com.br",
+    "createdAt": "2024-01-15T11:00:00.000Z",
+    "updatedAt": "2024-01-15T11:00:00.000Z"
+  }
+]
+```
+
+---
+
+### POST /api/portals
+
+Cria novo portal.
+
+**Request Body**
+```json
+{
+  "portalUrl": "https://novo-portal.bitrix24.com.br",
+  "clientId": "local.abc123.xyz",
+  "clientSecret": "secret_key_here"
+}
+```
+
+**Response 201 Created**
+```json
+{
+  "id": "uuid-3",
+  "portalUrl": "https://novo-portal.bitrix24.com.br",
+  "message": "Portal created successfully"
+}
+```
+
+---
+
+### DELETE /api/portals/:id
+
+Deleta um portal.
+
+**Response 200 OK**
+```json
+{
+  "message": "Portal deleted successfully"
+}
+```
+
+---
+
+## 📱 Mensagens Rich Media
+
+### POST /api/messages/image
+
+Envia imagem via WhatsApp.
+
+**Request Body**
+```json
+{
+  "to": "5511988888888",
+  "imageUrl": "https://example.com/image.jpg",
+  "caption": "Confira esta imagem!"
+}
+```
+
+**Response 200 OK**
+```json
+{
+  "success": true,
+  "data": {
+    "messaging_product": "whatsapp",
+    "contacts": [{ "wa_id": "5511988888888" }],
+    "messages": [{ "id": "wamid.xxx" }]
+  }
+}
+```
+
+---
+
+### POST /api/messages/video
+
+Envia vídeo via WhatsApp.
+
+**Request Body**
+```json
+{
+  "to": "5511988888888",
+  "videoUrl": "https://example.com/video.mp4",
+  "caption": "Veja este vídeo!"
+}
+```
+
+---
+
+### POST /api/messages/document
+
+Envia documento via WhatsApp.
+
+**Request Body**
+```json
+{
+  "to": "5511988888888",
+  "documentUrl": "https://example.com/document.pdf",
+  "filename": "catalogo.pdf",
+  "caption": "Catálogo de produtos"
+}
+```
+
+---
+
+### POST /api/messages/template
+
+Envia template do WhatsApp.
+
+**Request Body (Template Simples)**
+```json
+{
+  "to": "5511988888888",
+  "templateName": "hello_world",
+  "languageCode": "pt_BR"
+}
+```
+
+**Request Body (Template com Parâmetros)**
+```json
+{
+  "to": "5511988888888",
+  "templateName": "order_confirmation",
+  "parameters": ["João", "#12345", "R$ 150,00"],
+  "languageCode": "pt_BR"
+}
+```
+
+**Response 200 OK**
+```json
+{
+  "success": true,
+  "data": {
+    "messaging_product": "whatsapp",
+    "contacts": [{ "wa_id": "5511988888888" }],
+    "messages": [{ "id": "wamid.xxx" }]
+  }
+}
+```
+
+---
+
+### GET /api/messages/templates
+
+Lista templates do WhatsApp aprovados.
+
+**Response 200 OK**
+```json
+{
+  "success": true,
+  "data": {
+    "data": [
+      {
+        "name": "hello_world",
+        "language": "pt_BR",
+        "status": "APPROVED",
+        "category": "UTILITY"
+      },
+      {
+        "name": "order_confirmation",
+        "language": "pt_BR",
+        "status": "APPROVED",
+        "category": "UTILITY"
+      }
+    ]
+  }
+}
+```
 
 ---
 
