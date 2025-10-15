@@ -162,6 +162,9 @@ export async function buildServer() {
   await server.register(import('./routes/webhooks/meta.routes'), { prefix: '/webhooks' });
   await server.register(import('./routes/webhooks/bitrix24.routes'), { prefix: '/webhooks' });
 
+  // Registrar rotas de gerenciamento de portais
+  await server.register(import('./routes/portal/portal.routes'), { prefix: '/api' });
+
   return server;
 }
 

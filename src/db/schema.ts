@@ -19,10 +19,12 @@ export const portalConfig = pgTable('portal_config', {
 /**
  * Tabela ConversationMapping
  * Liga o ID do WhatsApp (Meta) ao ID do Bitrix24 (Contato/Lead e Chat)
+ * Suporta múltiplos portais (multi-tenant)
  */
 export const conversationMapping = pgTable('conversation_mapping', {
   id: uuid('id').primaryKey().defaultRandom(),
-  metaWhatsappId: varchar('meta_whatsapp_id', { length: 50 }).notNull().unique(),
+  portalId: uuid('portal_id').notNull().references(() => portalConfig.id, { onDelete: 'cascade' }),
+  metaWhatsappId: varchar('meta_whatsapp_id', { length: 50 }).notNull(),
   bitrixContactId: bigint('bitrix_contact_id', { mode: 'number' }).notNull(),
   bitrixChatId: bigint('bitrix_chat_id', { mode: 'number' }).notNull(),
   contactName: varchar('contact_name', { length: 255 }),

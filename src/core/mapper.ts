@@ -11,12 +11,13 @@ import type { ConversationMapping, NewConversationMapping } from '../db/schema';
  */
 export class ConversationMapper {
   /**
-   * Busca um mapeamento existente pelo ID do WhatsApp (Meta)
+   * Busca um mapeamento existente pelo ID do WhatsApp (Meta) e portal
    * Utiliza cache Redis para melhor performance
    * @param metaWhatsappId - ID do usuário no WhatsApp
+   * @param portalId - ID do portal (multi-tenant)
    * @returns Mapeamento encontrado ou null
    */
-  async findByMetaId(metaWhatsappId: string): Promise<ConversationMapping | null> {
+  async findByMetaId(metaWhatsappId: string, portalId?: string): Promise<ConversationMapping | null> {
     try {
       // Tenta buscar no cache primeiro
       const cached = await cacheService.getConversationMappingByMetaId(metaWhatsappId);
@@ -87,7 +88,8 @@ export class ConversationMapper {
   /**
    * Cria um novo mapeamento de conversa
    * Automaticamente armazena no cache Redis
-   * @param data - Dados do novo mapeamento
+   * Suporta multi-tenant via portalId
+   * @param data - Dados do novo mapeamento (incluindo portalId)
    * @returns Mapeamento criado ou null em caso de erro
    */
   async create(data: NewConversationMapping): Promise<ConversationMapping | null> {

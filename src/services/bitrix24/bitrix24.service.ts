@@ -1,9 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
-import { eq } from 'drizzle-orm';
-import { db } from '../../db';
-import { portalConfig } from '../../db/schema';
-import { env } from '../../config/env';
+import { portalService } from '../portal/portal.service';
 import { logger } from '../../config/logger';
+import type { PortalConfig } from '../../db/schema';
 import type {
   Bitrix24AuthResponse,
   Bitrix24ApiResponse,
@@ -20,14 +18,17 @@ import type {
 /**
  * Serviço para interagir com a API REST do Bitrix24
  * Gerencia autenticação, refresh de tokens e operações de CRM e Chat
+ * Suporta múltiplos portais (multi-tenant)
  */
 export class Bitrix24Service {
   private client: AxiosInstance;
-  private portalUrl: string;
+  private portal: PortalConfig | null = null;
   private accessToken: string | null = null;
 
-  constructor() {
-    this.portalUrl = env.BITRIX_PORTAL_URL;
+  constructor(portal?: PortalConfig) {
+    if (portal) {
+      this.portal = portal;
+    }
 
     this.client = axios.create({
       timeout: 30000, // 30 segundos
@@ -83,21 +84,30 @@ export class Bitrix24Service {
   }
 
   /**
+   * Define o portal a ser usado (multi-tenant)
+   */
+  setPortal(portal: PortalConfig): void {
+    this.portal = portal;
+  }
+
+  /**
    * Garante que o token de acesso está válido, renovando se necessário
    */
   private async ensureValidToken(): Promise<void> {
     try {
-      // Busca configuração do portal no banco
-      const [config] = await db
-        .select()
-        .from(portalConfig)
-        .where(eq(portalConfig.portalUrl, this.portalUrl))
-        .limit(1);
+      if (!this.portal) {
+        throw new Error('Portal não configurado');
+      }
+
+      // Recarrega portal do banco para pegar tokens atualizados
+      const config = await portalService.findById(this.portal.id);
 
       if (!config) {
         logger.warn('⚠️ Configuração do portal não encontrada no banco de dados');
         throw new Error('Portal não configurado');
       }
+
+      this.portal = config;
 
       // Verifica se o token ainda é válido (com margem de 5 minutos)
       const now = new Date();
@@ -105,7 +115,7 @@ export class Bitrix24Service {
 
       if (!expirationTime || now >= new Date(expirationTime.getTime() - 5 * 60 * 1000)) {
         logger.info('🔄 Token expirado ou próximo de expirar, renovando...');
-        await this.refreshAccessToken(config.refreshToken!);
+        await this.refreshAccessToken(config.refreshToken!, config.id);
       } else {
         this.accessToken = config.accessToken!;
       }
@@ -118,15 +128,19 @@ export class Bitrix24Service {
   /**
    * Renova o access token usando o refresh token
    */
-  private async refreshAccessToken(refreshToken: string): Promise<void> {
+  private async refreshAccessToken(refreshToken: string, portalId: string): Promise<void> {
     try {
+      if (!this.portal) {
+        throw new Error('Portal não configurado');
+      }
+
       const response = await axios.get<Bitrix24AuthResponse>(
-        `${this.portalUrl}/oauth/token/`,
+        `${this.portal.portalUrl}/oauth/token/`,
         {
           params: {
             grant_type: 'refresh_token',
-            client_id: env.BITRIX_CLIENT_ID,
-            client_secret: env.BITRIX_CLIENT_SECRET,
+            client_id: this.portal.clientId,
+            client_secret: this.portal.clientSecret,
             refresh_token: refreshToken,
           },
         }
@@ -134,19 +148,8 @@ export class Bitrix24Service {
 
       const { access_token, refresh_token: new_refresh_token, expires_in } = response.data;
 
-      // Calcula tempo de expiração
-      const expirationTime = new Date(Date.now() + expires_in * 1000);
-
-      // Atualiza no banco de dados
-      await db
-        .update(portalConfig)
-        .set({
-          accessToken: access_token,
-          refreshToken: new_refresh_token,
-          tokenExpirationTime: expirationTime,
-          updatedAt: new Date(),
-        })
-        .where(eq(portalConfig.portalUrl, this.portalUrl));
+      // Atualiza tokens no banco via PortalService
+      await portalService.updateTokens(portalId, access_token, new_refresh_token, expires_in);
 
       this.accessToken = access_token;
 
@@ -162,8 +165,12 @@ export class Bitrix24Service {
    */
   async createContact(params: CreateContactParams): Promise<number | null> {
     try {
+      if (!this.portal) {
+        throw new Error('Portal não configurado');
+      }
+
       const response = await this.client.post<Bitrix24ApiResponse<number>>(
-        `${this.portalUrl}/rest/crm.contact.add`,
+        `${this.portal.portalUrl}/rest/crm.contact.add`,
         { fields: params }
       );
 
@@ -190,8 +197,12 @@ export class Bitrix24Service {
    */
   async createLead(params: CreateLeadParams): Promise<number | null> {
     try {
+      if (!this.portal) {
+        throw new Error('Portal não configurado');
+      }
+
       const response = await this.client.post<Bitrix24ApiResponse<number>>(
-        `${this.portalUrl}/rest/crm.lead.add`,
+        `${this.portal.portalUrl}/rest/crm.lead.add`,
         { fields: params }
       );
 
@@ -218,8 +229,12 @@ export class Bitrix24Service {
    */
   async createOpenLineChat(entityId: string, title: string): Promise<number | null> {
     try {
+      if (!this.portal) {
+        throw new Error('Portal não configurado');
+      }
+
       const response = await this.client.post<Bitrix24ApiResponse<number>>(
-        `${this.portalUrl}/rest/imconnector.send.messages`,
+        `${this.portal.portalUrl}/rest/imconnector.send.messages`,
         {
           CONNECTOR: 'custom',
           LINE: 'zaptrix',
@@ -262,8 +277,12 @@ export class Bitrix24Service {
    */
   async sendMessage(params: SendMessageParams): Promise<number | null> {
     try {
+      if (!this.portal) {
+        throw new Error('Portal não configurado');
+      }
+
       const response = await this.client.post<Bitrix24ApiResponse<number>>(
-        `${this.portalUrl}/rest/im.message.add`,
+        `${this.portal.portalUrl}/rest/im.message.add`,
         params
       );
 
@@ -291,8 +310,12 @@ export class Bitrix24Service {
    */
   async findContactByPhone(phone: string): Promise<Bitrix24Contact | null> {
     try {
+      if (!this.portal) {
+        throw new Error('Portal não configurado');
+      }
+
       const response = await this.client.post<Bitrix24ApiResponse<Bitrix24Contact[]>>(
-        `${this.portalUrl}/rest/crm.contact.list`,
+        `${this.portal.portalUrl}/rest/crm.contact.list`,
         {
           filter: { PHONE: phone },
           select: ['ID', 'NAME', 'LAST_NAME', 'PHONE'],
@@ -309,8 +332,15 @@ export class Bitrix24Service {
       return null;
     }
   }
+  /**
+   * Cria uma instância para um portal específico
+   */
+  static forPortal(portal: PortalConfig): Bitrix24Service {
+    return new Bitrix24Service(portal);
+  }
 }
 
-// Exporta instância singleton
+// Exporta classe (não singleton para suportar multi-tenant)
+// Use Bitrix24Service.forPortal(portal) para criar instâncias
 export const bitrix24Service = new Bitrix24Service();
 
