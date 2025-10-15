@@ -1,9 +1,10 @@
 import { startServer } from './server';
 import { logger } from './config/logger';
+import './queues/workers'; // Importa workers para inicialização
 
 /**
  * Ponto de entrada da aplicação
- * Inicia o servidor Fastify e gerencia o lifecycle
+ * Inicia o servidor Fastify, workers e gerencia o lifecycle
  */
 async function main() {
   try {

@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { metaService } from '../../services/meta/meta.service';
-import { conversationMapper } from '../../core/mapper';
 import { logger } from '../../config/logger';
+import { addOutboundMessageJob } from '../../queues/queues';
 import type { Bitrix24OutboundWebhook } from '../../types/bitrix24.types';
 
 /**
@@ -63,7 +62,7 @@ const bitrix24WebhookRoutes: FastifyPluginAsync = async (fastify) => {
 
 /**
  * Processa uma mensagem de saída do Bitrix24 (resposta do agente)
- * Envia para o WhatsApp via Meta Cloud API
+ * Adiciona job à fila para processamento assíncrono
  */
 async function processOutboundMessage(webhook: Bitrix24OutboundWebhook): Promise<void> {
   try {
@@ -71,9 +70,10 @@ async function processOutboundMessage(webhook: Bitrix24OutboundWebhook): Promise
     const dialogId = params.DIALOG_ID;
     const message = params.MESSAGE;
     const fromUserId = params.FROM_USER_ID;
+    const messageId = params.MESSAGE_ID;
 
     logger.info({
-      msg: '📤 Processando mensagem de saída do Bitrix24',
+      msg: '📤 Recebendo mensagem de saída do Bitrix24',
       dialogId,
       fromUserId,
     });
@@ -87,46 +87,23 @@ async function processOutboundMessage(webhook: Bitrix24OutboundWebhook): Promise
 
     const bitrixChatId = parseInt(chatIdMatch[1], 10);
 
-    // Busca mapeamento pelo ID do chat do Bitrix24
-    const mapping = await conversationMapper.findByBitrixChatId(bitrixChatId);
+    // Adiciona à fila para processamento assíncrono
+    await addOutboundMessageJob({
+      bitrixChatId: bitrixChatId,
+      message: message,
+      fromUserId: fromUserId,
+      messageId: messageId,
+      timestamp: webhook.ts,
+    });
 
-    if (!mapping) {
-      logger.warn({
-        msg: '⚠️ Mapeamento não encontrado para chat',
-        bitrixChatId,
-      });
-      return;
-    }
-
-    // Verifica se a mensagem é do sistema ou de um agente
-    // (Evita loop: não reenvia mensagens que vieram do próprio webhook da Meta)
-    if (fromUserId === '0' || !fromUserId) {
-      logger.debug('Mensagem do sistema, ignorando');
-      return;
-    }
-
-    // Envia mensagem via WhatsApp
-    const result = await metaService.sendMessage(
-      mapping.metaWhatsappId,
-      message
-    );
-
-    if (result) {
-      logger.info({
-        msg: '✅ Mensagem enviada ao WhatsApp',
-        whatsappId: mapping.metaWhatsappId,
-        metaMessageId: result.messages[0].id,
-      });
-
-      // Atualiza timestamp da última mensagem
-      await conversationMapper.updateLastMessage(mapping.metaWhatsappId);
-    } else {
-      logger.error('❌ Falha ao enviar mensagem ao WhatsApp');
-    }
+    logger.info({
+      msg: '📤 Mensagem adicionada à fila de processamento',
+      messageId: messageId,
+    });
 
   } catch (error) {
     logger.error({
-      msg: '❌ Erro ao processar mensagem de saída do Bitrix24',
+      msg: '❌ Erro ao adicionar mensagem à fila',
       error: error instanceof Error ? error.message : error,
     });
   }

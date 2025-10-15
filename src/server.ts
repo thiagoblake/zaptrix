@@ -6,6 +6,7 @@ import { logger } from './config/logger';
 import { testConnection } from './db';
 import { testRedisConnection } from './config/redis';
 import { cacheService } from './services/cache/cache.service';
+import { getQueuesStats } from './queues/queues';
 
 /**
  * Cria e configura o servidor Fastify
@@ -98,6 +99,17 @@ export async function buildServer() {
   }, async (request, reply) => {
     const stats = await cacheService.getStats();
     return stats;
+  });
+
+  // Queues stats endpoint
+  server.get('/queues/stats', {
+    schema: {
+      description: 'Estatísticas das filas de processamento',
+      tags: ['Health'],
+    },
+  }, async (request, reply) => {
+    const stats = await getQueuesStats();
+    return stats || { error: 'Failed to get queue stats' };
   });
 
   // Registrar rotas de webhooks

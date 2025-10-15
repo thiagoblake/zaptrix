@@ -1,8 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { metaService } from '../../services/meta/meta.service';
-import { bitrix24Service } from '../../services/bitrix24/bitrix24.service';
-import { conversationMapper } from '../../core/mapper';
 import { logger } from '../../config/logger';
+import { addIncomingMessageJob } from '../../queues/queues';
 import type {
   MetaWebhookVerification,
   MetaWebhookMessage,
@@ -121,7 +120,7 @@ const metaWebhookRoutes: FastifyPluginAsync = async (fastify) => {
 
 /**
  * Processa uma mensagem recebida do WhatsApp
- * Lógica principal de mapeamento e envio para o Bitrix24
+ * Adiciona job à fila para processamento assíncrono
  */
 async function processIncomingMessage(message: MetaMessage, contactName: string): Promise<void> {
   try {
@@ -129,85 +128,30 @@ async function processIncomingMessage(message: MetaMessage, contactName: string)
     const messageText = message.text?.body || '[Mensagem não suportada]';
 
     logger.info({
-      msg: '📩 Processando mensagem do WhatsApp',
+      msg: '📩 Recebendo mensagem do WhatsApp',
       whatsappId,
       messageText,
       type: message.type,
     });
 
-    // Marca mensagem como lida
-    await metaService.markAsRead(message.id);
-
-    // Busca mapeamento existente
-    let mapping = await conversationMapper.findByMetaId(whatsappId);
-
-    if (!mapping) {
-      // Novo contato - cria no Bitrix24
-      logger.info({
-        msg: '👤 Novo contato detectado, criando no Bitrix24',
-        whatsappId,
-        contactName,
-      });
-
-      // Cria contato no Bitrix24
-      const contactId = await bitrix24Service.createContact({
-        NAME: contactName,
-        PHONE: [{ VALUE: whatsappId, VALUE_TYPE: 'WORK' }],
-      });
-
-      if (!contactId) {
-        logger.error('❌ Falha ao criar contato no Bitrix24');
-        return;
-      }
-
-      // Cria chat do Canal Aberto
-      const chatId = await bitrix24Service.createOpenLineChat(
-        whatsappId,
-        `WhatsApp: ${contactName}`
-      );
-
-      if (!chatId) {
-        logger.error('❌ Falha ao criar chat no Canal Aberto');
-        return;
-      }
-
-      // Cria mapeamento
-      mapping = await conversationMapper.create({
-        metaWhatsappId: whatsappId,
-        bitrixContactId: contactId,
-        bitrixChatId: chatId,
-        contactName: contactName,
-      });
-
-      if (!mapping) {
-        logger.error('❌ Falha ao criar mapeamento de conversa');
-        return;
-      }
-    } else {
-      // Atualiza timestamp da última mensagem
-      await conversationMapper.updateLastMessage(whatsappId);
-    }
-
-    // Envia mensagem para o Bitrix24
-    const messageId = await bitrix24Service.sendMessage({
-      DIALOG_ID: `chat${mapping.bitrixChatId}`,
-      MESSAGE: messageText,
-      SYSTEM: 'N',
+    // Adiciona à fila para processamento assíncrono
+    await addIncomingMessageJob({
+      messageId: message.id,
+      from: whatsappId,
+      contactName: contactName,
+      messageText: messageText,
+      messageType: message.type,
+      timestamp: message.timestamp,
     });
 
-    if (messageId) {
-      logger.info({
-        msg: '✅ Mensagem enviada ao Bitrix24',
-        bitrixChatId: mapping.bitrixChatId,
-        bitrixMessageId: messageId,
-      });
-    } else {
-      logger.error('❌ Falha ao enviar mensagem ao Bitrix24');
-    }
+    logger.info({
+      msg: '📥 Mensagem adicionada à fila de processamento',
+      messageId: message.id,
+    });
 
   } catch (error) {
     logger.error({
-      msg: '❌ Erro ao processar mensagem do WhatsApp',
+      msg: '❌ Erro ao adicionar mensagem à fila',
       error: error instanceof Error ? error.message : error,
     });
   }
