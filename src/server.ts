@@ -165,6 +165,9 @@ export async function buildServer() {
   // Registrar rotas de gerenciamento de portais
   await server.register(import('./routes/portal/portal.routes'), { prefix: '/api' });
 
+  // Registrar rotas de mensagens (rich media e templates)
+  await server.register(import('./routes/messages/messages.routes'), { prefix: '/api' });
+
   return server;
 }
 
