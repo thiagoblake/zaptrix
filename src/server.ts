@@ -4,6 +4,8 @@ import swaggerUI from '@fastify/swagger-ui';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { testConnection } from './db';
+import { testRedisConnection } from './config/redis';
+import { cacheService } from './services/cache/cache.service';
 
 /**
  * Cria e configura o servidor Fastify
@@ -60,18 +62,42 @@ export async function buildServer() {
             status: { type: 'string' },
             timestamp: { type: 'string' },
             database: { type: 'string' },
+            redis: { type: 'string' },
           },
         },
       },
     },
   }, async (request, reply) => {
     const dbConnected = await testConnection();
+    const redisConnected = await testRedisConnection();
     
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
       database: dbConnected ? 'connected' : 'disconnected',
+      redis: redisConnected ? 'connected' : 'disconnected',
     };
+  });
+
+  // Cache stats endpoint
+  server.get('/cache/stats', {
+    schema: {
+      description: 'Estatísticas do cache Redis',
+      tags: ['Health'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            usedMemory: { type: 'string' },
+            connectedClients: { type: 'number' },
+            totalKeys: { type: 'number' },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const stats = await cacheService.getStats();
+    return stats;
   });
 
   // Registrar rotas de webhooks
@@ -88,14 +114,20 @@ export async function startServer() {
   try {
     const server = await buildServer();
 
-    // Testa conexão com o banco de dados antes de iniciar
+    // Testa conexões antes de iniciar
     const dbConnected = await testConnection();
     if (!dbConnected) {
       logger.error('❌ Não foi possível conectar ao banco de dados');
       process.exit(1);
     }
-
     logger.info('✅ Conexão com o banco de dados estabelecida');
+
+    const redisConnected = await testRedisConnection();
+    if (!redisConnected) {
+      logger.warn('⚠️ Redis não está disponível, cache desabilitado');
+    } else {
+      logger.info('✅ Conexão com Redis estabelecida');
+    }
 
     await server.listen({ port: env.PORT, host: env.HOST });
 

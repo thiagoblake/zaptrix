@@ -14,6 +14,12 @@ const envSchema = z.object({
   // Database
   DATABASE_URL: z.string().url(),
 
+  // Redis
+  REDIS_HOST: z.string().default('localhost'),
+  REDIS_PORT: z.string().transform(Number).default('6379'),
+  REDIS_PASSWORD: z.string().optional(),
+  REDIS_DB: z.string().transform(Number).default('0'),
+
   // Meta Cloud API
   META_VERIFY_TOKEN: z.string().min(1),
   META_ACCESS_TOKEN: z.string().min(1),

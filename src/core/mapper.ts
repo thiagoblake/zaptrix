@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { conversationMapping } from '../db/schema';
 import { logger } from '../config/logger';
+import { cacheService } from '../services/cache/cache.service';
 import type { ConversationMapping, NewConversationMapping } from '../db/schema';
 
 /**
@@ -11,16 +12,29 @@ import type { ConversationMapping, NewConversationMapping } from '../db/schema';
 export class ConversationMapper {
   /**
    * Busca um mapeamento existente pelo ID do WhatsApp (Meta)
+   * Utiliza cache Redis para melhor performance
    * @param metaWhatsappId - ID do usuário no WhatsApp
    * @returns Mapeamento encontrado ou null
    */
   async findByMetaId(metaWhatsappId: string): Promise<ConversationMapping | null> {
     try {
+      // Tenta buscar no cache primeiro
+      const cached = await cacheService.getConversationMappingByMetaId(metaWhatsappId);
+      if (cached) {
+        return cached;
+      }
+
+      // Se não estiver no cache, busca no banco
       const [mapping] = await db
         .select()
         .from(conversationMapping)
         .where(eq(conversationMapping.metaWhatsappId, metaWhatsappId))
         .limit(1);
+
+      // Se encontrou, armazena no cache
+      if (mapping) {
+        await cacheService.setConversationMapping(metaWhatsappId, mapping);
+      }
 
       return mapping || null;
     } catch (error) {
@@ -35,16 +49,29 @@ export class ConversationMapper {
 
   /**
    * Busca um mapeamento existente pelo ID do chat no Bitrix24
+   * Utiliza cache Redis para melhor performance
    * @param bitrixChatId - ID do chat no Bitrix24
    * @returns Mapeamento encontrado ou null
    */
   async findByBitrixChatId(bitrixChatId: number): Promise<ConversationMapping | null> {
     try {
+      // Tenta buscar no cache primeiro
+      const cached = await cacheService.getConversationMappingByBitrixChatId(bitrixChatId);
+      if (cached) {
+        return cached;
+      }
+
+      // Se não estiver no cache, busca no banco
       const [mapping] = await db
         .select()
         .from(conversationMapping)
         .where(eq(conversationMapping.bitrixChatId, bitrixChatId))
         .limit(1);
+
+      // Se encontrou, armazena no cache
+      if (mapping) {
+        await cacheService.setConversationMapping(mapping.metaWhatsappId, mapping);
+      }
 
       return mapping || null;
     } catch (error) {
@@ -59,6 +86,7 @@ export class ConversationMapper {
 
   /**
    * Cria um novo mapeamento de conversa
+   * Automaticamente armazena no cache Redis
    * @param data - Dados do novo mapeamento
    * @returns Mapeamento criado ou null em caso de erro
    */
@@ -73,6 +101,9 @@ export class ConversationMapper {
           updatedAt: new Date(),
         })
         .returning();
+
+      // Armazena no cache
+      await cacheService.setConversationMapping(newMapping.metaWhatsappId, newMapping);
 
       logger.info({
         msg: '✅ Novo mapeamento de conversa criado',
@@ -130,11 +161,21 @@ export class ConversationMapper {
 
   /**
    * Remove um mapeamento existente (raramente usado)
+   * Remove também do cache
    * @param metaWhatsappId - ID do usuário no WhatsApp
    * @returns Sucesso ou falha da operação
    */
   async delete(metaWhatsappId: string): Promise<boolean> {
     try {
+      // Busca o mapeamento para obter o bitrixChatId
+      const mapping = await this.findByMetaId(metaWhatsappId);
+      
+      if (mapping) {
+        // Remove do cache
+        await cacheService.deleteConversationMapping(metaWhatsappId, mapping.bitrixChatId);
+      }
+
+      // Remove do banco
       await db
         .delete(conversationMapping)
         .where(eq(conversationMapping.metaWhatsappId, metaWhatsappId));
