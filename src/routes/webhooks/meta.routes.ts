@@ -64,6 +64,12 @@ const metaWebhookRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body: MetaWebhookMessage;
   }>('/meta', {
+    config: {
+      rateLimit: {
+        max: 200, // 200 requests por minuto para webhooks da Meta
+        timeWindow: '1 minute',
+      },
+    },
     schema: {
       description: 'Recebe webhooks de mensagens da Meta Cloud API',
       tags: ['Meta Webhooks'],

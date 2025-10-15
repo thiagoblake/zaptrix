@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import { env } from './config/env';
@@ -18,6 +19,29 @@ export async function buildServer() {
     requestIdLogLabel: 'reqId',
     disableRequestLogging: false,
     requestIdHeader: 'x-request-id',
+  });
+
+  // Registra Rate Limiting global
+  await server.register(rateLimit, {
+    global: true,
+    max: 100, // 100 requests
+    timeWindow: '1 minute', // por minuto
+    redis: require('../config/redis').redis, // Usa Redis para rate limiting distribuído
+    nameSpace: 'zaptrix-rate-limit:',
+    continueExceeding: true,
+    skipOnError: true, // Não bloqueia se Redis falhar
+    keyGenerator: (request) => {
+      // Rate limit por IP ou por header customizado
+      return request.headers['x-client-id'] as string || request.ip;
+    },
+    errorResponseBuilder: (request, context) => {
+      return {
+        statusCode: 429,
+        error: 'Too Many Requests',
+        message: `Rate limit exceeded. Try again in ${Math.ceil(context.ttl / 1000)} seconds.`,
+        retryAfter: context.ttl,
+      };
+    },
   });
 
   // Registra Swagger para documentação

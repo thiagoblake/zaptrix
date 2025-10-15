@@ -15,6 +15,12 @@ const bitrix24WebhookRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Body: Bitrix24OutboundWebhook;
   }>('/bitrix24/outbound', {
+    config: {
+      rateLimit: {
+        max: 200, // 200 requests por minuto para webhooks do Bitrix24
+        timeWindow: '1 minute',
+      },
+    },
     schema: {
       description: 'Recebe webhooks de mensagens de saída do Bitrix24 (respostas dos agentes)',
       tags: ['Bitrix24 Webhooks'],
