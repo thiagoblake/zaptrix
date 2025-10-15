@@ -1,0 +1,54 @@
+{
+  "name": "zaptrix",
+  "version": "1.0.0",
+  "description": "Serviço de Gateway para Integração Bitrix24 e Meta Cloud API (WhatsApp Business API)",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:setup": "tsx scripts/setup-portal.ts",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "keywords": [
+    "bitrix24",
+    "whatsapp",
+    "meta-api",
+    "integration",
+    "webhook",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/swagger": "^8.14.0",
+    "@fastify/swagger-ui": "^3.0.0",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.30.10",
+    "fastify": "^4.26.2",
+    "pg": "^8.11.5",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0",
+    "zod": "^3.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@types/pg": "^8.11.5",
+    "@typescript-eslint/eslint-plugin": "^7.7.0",
+    "@typescript-eslint/parser": "^7.7.0",
+    "drizzle-kit": "^0.20.18",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5"
+  }
+}
+
