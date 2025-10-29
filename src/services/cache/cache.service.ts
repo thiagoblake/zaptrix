@@ -18,7 +18,7 @@ export class CacheService {
    * @param metaWhatsappId - ID do WhatsApp
    * @param mapping - Dados do mapeamento
    */
-  async setCon versationMapping(
+  async setConversationMapping(
     metaWhatsappId: string,
     mapping: ConversationMapping
   ): Promise<void> {
