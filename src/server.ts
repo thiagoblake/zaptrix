@@ -5,7 +5,7 @@ import swaggerUI from '@fastify/swagger-ui';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { testConnection } from './db';
-import { testRedisConnection } from './config/redis';
+import { redis, testRedisConnection } from './config/redis';
 import { cacheService } from './services/cache/cache.service';
 import { getQueuesStats } from './queues/queues';
 import { prometheusService } from './services/metrics/prometheus.service';
@@ -26,7 +26,7 @@ export async function buildServer() {
     global: true,
     max: 100, // 100 requests
     timeWindow: '1 minute', // por minuto
-    redis: require('../config/redis').redis, // Usa Redis para rate limiting distribuído
+    redis: redis, // Usa Redis para rate limiting distribuído
     nameSpace: 'zaptrix-rate-limit:',
     continueExceeding: true,
     skipOnError: true, // Não bloqueia se Redis falhar
